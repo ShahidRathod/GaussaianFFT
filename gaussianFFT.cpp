@@ -25,10 +25,11 @@ struct Indx { int i, j; };
 template <int k>
 struct inverseFFT {
     static constexpr int sz = 1 << k;
-    ComplexT omega[sz];
+    static constexpr int sz_sq = 1 << (2 * k);
+
+    ComplexT omega[sz],fft_buffer[3 * sz_sq];
     ComplexT* output = nullptr;
     ComplexT* input = nullptr;
-
     inverseFFT() = default;
 
     inverseFFT(ComplexT* inp, ComplexT* out) {
@@ -44,17 +45,18 @@ struct inverseFFT {
     }
 
     void eval_fft() {
-        for (int i = 0; i < sz;i++) fft(sz, 0, output + i * sz);
+        for (int i = 0; i < sz;i++) fft(sz, 0, output + i * sz, fft_buffer);
     }
 
-    void fft(int n, int s, ComplexT* write) {
+    void fft(int n, int s, ComplexT* write, ComplexT* odd = nullptr) {
         if (n == 1) {
             write[0] = input[s];
             return;
         }
 
         int n2 = n / 2;
-        ComplexT* odd = write + n;
+        if (!odd) odd = write + n;
+
         ComplexT* even = odd + n2;
        
         fft(n2, s, odd);
@@ -67,6 +69,8 @@ struct inverseFFT {
             write[n2 + i] = oi - ei;
         }
     }
+
+
 
 };
 
@@ -116,7 +120,6 @@ struct ComplexNoise {
                 int indx = i * sz + j;
                 int is = sz - i-1;
                 int js = sz - j-1;
-                //float val = std::exp(-((z-i)<<1 + (z-j)<<1)*0.1)*20;
                 float val  = std::exp(- ( sqre(z - i - 1) + sqre(z - j - 1))*0.1 );
                 set_vals(spectral_bias, val, { {i,j} , {is,j},{i,js},{is,js} });
                 ComplexT c(normal_gen(), normal_gen());
