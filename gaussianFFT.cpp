@@ -11,15 +11,23 @@
 #include <stdlib.h>
 
 template <typename T>
-void arr_sum (T* dst , T *a , T* b, int n, int sign =1) {
+void arr_sum(T* dst , T *a , T* b, int n,int sign =1) {
     for (int i = 0;i<n; i++) dst[i] = a[i]+ sign*b[i];
 }
+
+
+template <typename T>
+void arr_mul(T* dst , T * m, int n, int s) {
+    for (int i = 0;i<n; i+=s) dst[i] *= m[i];
+}
+
 
 template <typename T , int sz>
 struct ComplexArray {
     T real[sz] , imag[sz];
-    
+
     template <int n> using ComplexArrayT = ComplexArray<T,n> ;
+
     template <int n>
     void odd_even_sum(ComplexArrayT<n/2>* odd, ComplexArrayT<n/2>* even){
         int n2 = n/2;
@@ -27,15 +35,21 @@ struct ComplexArray {
         arr_sum (real + n2,odd.real,even.real,n2, -1);
         arr_sum (imag,odd.real,even.real,n2);
         arr_sum (imag+ n2 ,odd.real,even.real,n2, -1);
-       
-       
         
     }
+
+
+    template <int osz>
+    void arr_mul(ComplexArrayT<osz>* omega, int s) {
+        arr_mul(real, omega.real,osz, s);
+        arr_mul(imag, omega.imag,osz ,s);
+    }
+
 };
 
 
-
 inline int sqre(int x) { return x * x; };
+
 using ComplexT = std::complex<float>;
 constexpr float pi = std::numbers::pi_v<float>;
 
@@ -44,7 +58,16 @@ constexpr int arrsz(int k, int d) { return 1 << (k * d); }
 
 inline int pow2(int n) { return 1 << n; };
 
+
 template <int n> using ComplexArrayT = ComplexArray<float,n> ;
+
+
+template <int sz>
+struct FFTPack {
+    ComplexArrayT<sz> write;
+    ComplexArrayT<sz/2> odd ,even;
+}
+
 struct Indx { int i, j; };
 
 template <int k>
@@ -69,24 +92,23 @@ struct inverseFFT {
         }
     }
 
- 
-    void eval_fft() {
-        for (int i = 0; i < sz;i++) fft(sz, 0, output + i * sz, fft_buffer);
-    }
-
-    void fft(int n, int s, ComplexT* write, ComplexT* odd = nullptr) {
+    template <int n>
+    void fft(int s, ComplexArrayT<n>* write, ComplexArrayT<n/2>* odd = nullptr) {
+        
         if (n == 1) {
-            write[0] = input[s];
+            write.real[0] = input.real[0];
+            write.imag[0] = input.imag[0];
             return;
         }
 
-        int n2 = n / 2;
-        if (!odd) odd = write + n;
+        constexpr int n2 = n / 2;
 
-        ComplexT* even = odd + n2;
+        if (!odd) odd = write + 1;
+        ComplexT* even = odd + 1;
        
-        fft(n2, s, odd);
-        fft(n2, s + 1, even);
+        fft<n2>(s, odd);
+        fft<n2>(s + 1, even);
+
 
         for (int i = 0; i < n2; i++) {
             ComplexT ei = even[i] * omega[(i * sz / n2) % sz];
@@ -95,8 +117,10 @@ struct inverseFFT {
             write[n2 + i] = oi - ei;
         }
     }
-
-
+    
+    void eval_fft() {
+        for (int i = 0; i < sz;i++) fft<sz>(sz, 0, output + i * sz, fft_buffer);
+    }
 
 };
 
@@ -184,6 +208,7 @@ void write_lst_to(float* arr, int sz , int d,int stride, std::stringstream & lst
     lst_string << "]\n";
 
 }
+
 int main() {
 
     ComplexNoise<5> cn;
