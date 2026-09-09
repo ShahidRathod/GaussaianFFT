@@ -10,8 +10,32 @@
 #include <sstream>
 #include <stdlib.h>
 
-inline int sqre(int x) { return x * x; };
+template <typename T>
+void arr_sum (T* dst , T *a , T* b, int n, int sign =1) {
+    for (int i = 0;i<n; i++) dst[i] = a[i]+ sign*b[i];
+}
 
+template <typename T , int sz>
+struct ComplexArray {
+    T real[sz] , imag[sz];
+    
+    template <int n> using ComplexArrayT = ComplexArray<T,n> ;
+    template <int n>
+    void odd_even_sum(ComplexArrayT<n/2>* odd, ComplexArrayT<n/2>* even){
+        int n2 = n/2;
+        arr_sum (real,odd.real,even.real,n2);
+        arr_sum (real + n2,odd.real,even.real,n2, -1);
+        arr_sum (imag,odd.real,even.real,n2);
+        arr_sum (imag+ n2 ,odd.real,even.real,n2, -1);
+       
+       
+        
+    }
+};
+
+
+
+inline int sqre(int x) { return x * x; };
 using ComplexT = std::complex<float>;
 constexpr float pi = std::numbers::pi_v<float>;
 
@@ -20,13 +44,14 @@ constexpr int arrsz(int k, int d) { return 1 << (k * d); }
 
 inline int pow2(int n) { return 1 << n; };
 
+template <int n> using ComplexArrayT = ComplexArray<float,n> ;
 struct Indx { int i, j; };
 
 template <int k>
 struct inverseFFT {
     static constexpr int sz = 1 << k;
     static constexpr int sz_sq = 1 << (2 * k);
-
+    
     ComplexT omega[sz],fft_buffer[3 * sz_sq];
     ComplexT* output = nullptr;
     ComplexT* input = nullptr;
@@ -44,6 +69,7 @@ struct inverseFFT {
         }
     }
 
+ 
     void eval_fft() {
         for (int i = 0; i < sz;i++) fft(sz, 0, output + i * sz, fft_buffer);
     }
@@ -158,7 +184,6 @@ void write_lst_to(float* arr, int sz , int d,int stride, std::stringstream & lst
     lst_string << "]\n";
 
 }
-
 int main() {
 
     ComplexNoise<5> cn;
