@@ -45,76 +45,78 @@ struct OmegaTabel {
     }
 };
 
-template <typename T,int N,int n>
-inline void butterfly(ComplexArray<T,n>& write,ComplexArray<T,n/2>& even,ComplexArray<T,n/2>& odd) {
-    for (int i = 0; i < nby2;i++) {
 
-        float cos = OmegaTabel<N>::omega[Nbyn * i];
-        float sin = OmegaTabel<N>::omega[i * Nbyn + Nby4];
-
-        even.real[i] = sin * even.real[i] - cos * even.imag[i];
-        even.imag[i] = sin * even.imag[i] + cos * even.real[i];
-
-        write.real[i] = odd.real[i] + even.real[i];
-        write.imag[i] = odd.imag[i] + even.imag[i];
-
-        write.real[i + nby2] = odd.real[i] - even.real[i];
-        write.imag[i + nby2] = odd.imag[i] - even.real[i];
-    }
-
-}
-
-template<int N>
+template<int n>
 struct FFTPack
 {
     ComplexArrayFloat<n> write;
-    static FFTPack<N / 2> even, odd;
-    inline void evaluate() { 
-        butterfly(write,even.write,odd.write);
+    static FFTPack<n / 2> even, odd;
+   
+    inline void butterfly() {
+        for (int i = 0; i < nby2;i++) {
+
+            float cos = OmegaTabel<N>::omega[Nbyn * i];
+            float sin = OmegaTabel<N>::omega[i * Nbyn + Nby4];
+
+            even.real[i] = sin * even.real[i] - cos * even.imag[i];
+            even.imag[i] = sin * even.imag[i] + cos * even.real[i];
+
+            write.real[i] = odd.real[i] + even.real[i];
+            write.imag[i] = odd.imag[i] + even.imag[i];
+
+            write.real[i + nby2] = odd.real[i] - even.real[i];
+            write.imag[i + nby2] = odd.imag[i] - even.real[i];
+        }
+
     }
 };
 
 
-template <int N>
-struct FFTCompute {
-    constexpr static int nby2 = N / 2, nby4 = n / 4, Nby4 = N / 4, Nbyn = N / n;
-    ComplexArrayFloat<N> write;
-    static FFTCompute<N, N/2> buffer;
-    inline void evaluate() {
-        butterfly(input, buffer.even.write, buffer.odd.write);
+struct FFTPack<1> 
+{
+    ComplexArrayFloat<1> write;
+    inline void butterfly() {}
+};
+
+template <typename LstT, int I> struct IndexedLst {
+    static LstT item;
+    IndexedLst<LstT,I - 1>;
+    inline void butterfly() { 
+        pack.butterfly(); 
     }
 };
 
+template<typename T> struct IndexedLst<T, 0> {};
 
-
-
+template <int L , int n>
+using IndexedFFTPack = IndexLst<FFTPack<n>,L>;
 
 struct Indx { int i, j; };
 
 template <int sz, int d>
 struct inverse2DFFT {
     static constexpr int sz_sq = sz * sz;
-    ComplexArrayFloat<sz> input[sz];
-    inverse2DFFT<sx, d - 1> out;
+    FFTPack<sz> input[sz];
+    inverse2DFFT<sz, d - 1> output;
     inverse2DFFT() {}
-    template <int n>
-    void fft_hlpr(int s, FFTPack<sz, n>* pack) {
 
+    template <int n>
+    void fft_hlpr(int s, FFTPack<sz, n>& pack) {
         if constexpr (n == 1) {
-            *(pack->write) = input[s];
-            return;
+            pack->write.real[0] = input.write.real[s];
+            pack->write.imag[0] = input.write.imag[s];
         }
-        constexpr int nby2 = n / 2;
-        fft_hlpr<nby2>(s + 1, pack->even);
-        fft_hlpr<nby2>(s, pack->odd);
-        pack->evaluate();
+        else {
+            constexpr int nby2 = n / 2;
+            fft_hlpr<nby2>(s + 1, pack.even);
+            fft_hlpr<nby2>(s, pack.odd);
+            pack->evaluate();
+        }
     }
 
     void fft() {
-        for (int i = 0; i < 2 * sz;i++) {
-            fft_hlpr<sz>(0, inp + i);
-        }
-        out.fft();
+        for (int i = 0; i < 2 * sz;i++) fft_hlpr(0, output[i]);
+        output.fft();
     }
 
 };
