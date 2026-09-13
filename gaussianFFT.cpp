@@ -1,4 +1,4 @@
-#include <random>
+#+includ---++e <random>
 #include <functional>
 #include <cmath>
 #include <numbers>
@@ -11,55 +11,9 @@
 #include <stdlib.h>
 
 
-template <typename T>
-struct Complex {
-    T real;
-    T imag;
-
-    Complex operator+(Complex& c) {
-        return { real + c.real,imag + c.imag };
-    }
-
-
-    Complex operator-(Complex& c) {
-        return { real + c.real,imag + c.imag };
-    }
-};
-
-template <typename T>
-struct ComplexRef {
-    T* real;
-    T* imag;
-
-    void operator=(ComplexRef<T> val) {
-        *real = *val.real;
-        *imag = *val.imag;
-    }
-    void operator=(Complex val) {
-        *real = val.real;
-        *imag = val.imag;
-    }
-
-
-    Complex operator+(Complex& c) {
-        return { real + c.real,imag + c.imag };
-    }
-
-    Complex operator-(Complex& c) {
-        return { real + c.real,imag + c.imag };
-    }
-};
-
-
 template <typename T, int sz>
 struct ComplexArray {
     T real[sz], imag[sz];
-
-    ComplexRef<T> operator[](int i) {
-        return ComplexRef{ real + i,imag + i };
-    }
-
-
 };
 
 
@@ -76,72 +30,78 @@ inline int pow2(int n) { return 1 << n; };
 
 inline int sqre(int x) { return x * x; };
 
-template<int N, int n>
-struct FFTPack
-{
-    constexpr static int nby2 = N / 2, nby4 = n / 4, Nby4 = N / 4;
-    inline static float omega[N +Nby4];
-
-    ComplexArrayFloat<n> write;
-    FFTPack<N,n / 2> even, odd;
-    constexpr static void make_omega() {
-
+template<int N> 
+struct OmegaTabel {
+    inline static float omega[N + Nby4];
+    bool omega_made = false;
+    static void make_omega() {
+        if (omega_made) return;
         for (int i = 0;i < N; i++)
             omega[i] = cos(2 * pi * i / N);
 
         for (int i = 0;i < Nby4; i++)
             omega[N + i] = omega[i];
+        omega_made = true;
+    }
+};
 
+template <typename T,int N,int n>
+inline void butterfly(ComplexArray<T,n>& write,ComplexArray<T,n/2>& even,ComplexArray<T,n/2>& odd) {
+    for (int i = 0; i < nby2;i++) {
+
+        float cos = OmegaTabel<N>::omega[Nbyn * i];
+        float sin = OmegaTabel<N>::omega[i * Nbyn + Nby4];
+
+        even.real[i] = sin * even.real[i] - cos * even.imag[i];
+        even.imag[i] = sin * even.imag[i] + cos * even.real[i];
+
+        write.real[i] = odd.real[i] + even.real[i];
+        write.imag[i] = odd.imag[i] + even.imag[i];
+
+        write.real[i + nby2] = odd.real[i] - even.real[i];
+        write.imag[i + nby2] = odd.imag[i] - even.real[i];
     }
 
-    inline void evaluate() {
+}
 
-        for (int i = 0; i < nby4;i++) {
-            float cos = omega[i];
-            float sin = omega[i + nby4];
-            float res_sin = sin * even.imag[i];
-            float res_cos = cos * even.real[i];
-
-            float even_real = res_sin - res_cos;
-            float even_imag = res_sin + res_cos;
-
-            even.real[i] = even_real;
-            even.imag[i] = even_imag;
-
-            write.real[i] = odd.real[i] + even.real[i];
-            write.imag[i] = odd.imag[i] + even.imag[i];
-
-
-            write.real[i + nby4] = odd.real[i] - even.real[i];
-            write.imag[i + nby4] = odd.imag[i] - even.real[i];
-        }
-
+template<int N>
+struct FFTPack
+{
+    ComplexArrayFloat<n> write;
+    static FFTPack<N / 2> even, odd;
+    inline void evaluate() { 
+        butterfly(write,even.write,odd.write);
     }
 };
 
 
+template <int N>
+struct FFTCompute {
+    constexpr static int nby2 = N / 2, nby4 = n / 4, Nby4 = N / 4, Nbyn = N / n;
+    ComplexArrayFloat<N> write;
+    static FFTCompute<N, N/2> buffer;
+    inline void evaluate() {
+        butterfly(input, buffer.even.write, buffer.odd.write);
+    }
+};
+
+
+
+
+
 struct Indx { int i, j; };
 
-template <int sz>
+template <int sz, int d>
 struct inverse2DFFT {
-    static constexpr int sz_sq = sz*sz;
-    using ComplexArrayTsz = ComplexArrayFloat<sz>;
-
-    ComplexArrayTsz input[sz], fx[sz], fy[sz], fft_buffer_last;
-    ComplexT* input = nullptr;
-    inverse2DFFT() = default;
-
-    ComplexArrayTsz* output() { return fy; }
-
-    ComplexArrayTsz* input() {
-        return input
-    }
-
+    static constexpr int sz_sq = sz * sz;
+    ComplexArrayFloat<sz> input[sz];
+    inverse2DFFT<sx, d - 1> out;
+    inverse2DFFT() {}
     template <int n>
     void fft_hlpr(int s, FFTPack<sz, n>* pack) {
 
         if constexpr (n == 1) {
-            *pack = input[s];
+            *(pack->write) = input[s];
             return;
         }
         constexpr int nby2 = n / 2;
@@ -150,18 +110,18 @@ struct inverse2DFFT {
         pack->evaluate();
     }
 
-    template <int n>
-    void fft(int s, ComplexArrayTsz* inp, ComplexArrayTsz* out) {
-        fft_hlpr<nby2>(s + 1, (FFTPack<sz, n>*)inp);
-    }
-
-
-    void eval_fft(ComplexArrayTsz* inp = input,ComplexArrayTsz* out = fx) 
+    void fft() {
         for (int i = 0; i < 2 * sz;i++) {
-            fft_hlpr<sz>(0, out[i]);
+            fft_hlpr<sz>(0, inp + i);
         }
+        out.fft();
     }
 
+};
+
+template<int sz> 
+struct inverse2DFFT<sz, 0> {
+    void fft() {}
 };
 
 template <int k>
@@ -171,7 +131,7 @@ struct ComplexNoise {
 
     ComplexArrayFloat<sz>* noise;
     float spectral_bias[sz_sq];
-    inverse2DFFT<sz> fft;
+    inverse2DFFT<sz,2> fft;
     std::random_device seed_gen;
     std::normal_distribution<float> normal{ 0, 1 };
     int seed;
@@ -182,11 +142,11 @@ struct ComplexNoise {
     }
 
     void inverse_fft() {
-        fft.input;
         fft.eval_fft();
     }
 
     inline int index(int i, int j) { return i + sz * j; }
+
 
     template<typename T>
     void set_vals(T* arr, T val, std::initializer_list <Indx> lst) {
@@ -199,29 +159,37 @@ struct ComplexNoise {
         int z = sz / 2;
         for (int i = 0; i < z; i++) {
             for (int j = 0; j < z; j++) {
-                int indx = i * sz + j;
+
                 int is = sz - i - 1;
                 int js = sz - j - 1;
                 float val = std::exp(-(sqre(z - i - 1) + sqre(z - j - 1)) * 0.1);
                 set_vals(spectral_bias, val, { {i,j} , {is,j},{i,js},{is,js} });
-                ComplexT c(normal_gen(), normal_gen());
-                noise[indx] = noise[(i + z) * sz + (j + z)] = c;
-                noise[indx + z] = noise[(i + z) * sz + j] = ComplexT{ *c.real,-*c.imag };
-            }
-        }
 
-        set_vals(noise, ComplexT{}, { {z, z}, {z ,sz - 1}, {0,0} });
+                noise[i].real[j] = noise[z - i].real[z - j] =
+                    noise[i + z].real[j + z] = noise[i + z].real[z] = normal_gen();
+
+                float val = noise[i + z].imag[i] = noise[i].imag[i + z] = normal_gen();
+                noise[i].imag[i] = noise[i + z].imag[i + z] = -val;
+
+            }
+
+        }
+        noise[0].real[0] = noise[z].real[z] = noise[z].real[sz - 1] = noise[sz - 1].real[z] = 0;
+
     }
 
     void apply_spectral_bias() {
-        for (int i = 0; i < sz_sq; i++) {
-            *noise[i].real /= spectral_bias[i];
-            *noise[i].imag /= spectral_bias[i];
+        for (int i = 0; i < sz;i++) {
+            for (int j = 0; j < sz; j++) {
+                noise[i].real[j] /= spectral_bias[i];
+                noise[i].imag[j] /= spectral_bias[i];
+            }
         }
     }
 
     ComplexNoise() {
-        noise = fft.input();
+        FFTCompute<sz,sz>::make_omega();
+        noise = fft.input;
         gen_seed();
         init_arrays();
     }
