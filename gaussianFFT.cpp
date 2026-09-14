@@ -47,6 +47,14 @@ struct OmegaTabel {
         if constexpr (N > 1)
             next.make_omega();
     }
+    
+    static float* cos() {
+        return omega;
+    }
+
+    static float* sin() {
+				    return omega + N/4;
+    }
 };
 
 
@@ -70,14 +78,13 @@ struct FFTPack : ComplexArrayFloat<n>
     inline void butterfly(int s, FFTPack<N>& input) {
         even.butterfly(s * 2, input);
         odd.butterfly(s * 2 + 1, input);
+        float* cos = OmegaTabel<n>::cos();
+        float* sin = OmegaTabel<n>::sin();
 
         for (int i = 0; i < nby2;i++) {
 
-            float cos = OmegaTabel<n>::omega[i];
-            float sin = OmegaTabel<n>::omega[i + n / 4];
-
-            float even_real = sin * even.real[i] - cos * even.imag[i];
-            float even_imag = sin * even.imag[i] + cos * even.real[i];
+            float even_real = sin[i] * even.real[i] - cos[i] * even.imag[i];
+            float even_imag = sin[i] * even.imag[i] + cos[i] * even.real[i];
 
             this->real[i] = odd.real[i] + even_real;
             this->imag[i] = odd.imag[i] + even_imag;
