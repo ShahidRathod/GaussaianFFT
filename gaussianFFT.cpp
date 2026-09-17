@@ -9,6 +9,8 @@
 #include <fstream>
 #include <sstream>
 #include <stdlib.h>
+#include <numbers>
+
 
 void write_plain_arr(float* arr, int sz, int stride, std::stringstream& lst_string) {
 
@@ -55,6 +57,9 @@ using ComplexT = ComplexArrayFloat<1>;
 
 
 constexpr float pi = std::numbers::pi_v<float>;
+constexpr float root2f = std::numbers::sqrt2_v<float>;
+//constexpr float root2f = std::numbers::sqrt2_v<float>;
+
 constexpr int arrsz(int k, int d) { return 1 << (k * d); }
 inline int pow2(int n) { return 1 << n; };
 
@@ -64,28 +69,41 @@ template <typename T>
 inline T sqre(T x) { return x * x; };
 
 
-template<int N>
+template<int N, int n>
 struct OmegaTabel {
-    inline static float omega[N + N / 4];
-    inline static OmegaTabel<N / 2> next;
+    inline static float omega[n + n / 4];
+    inline static OmegaTabel<N, n / 2> next;
 
-    static float* get_sin() { return (omega + N / 4); }
+    static float* get_minus_sin() { return (omega + n / 4); }
     static float* get_cos() { return omega; }
 
     static void make_omega() {
-        for (int i = 0;i < N; i++)
-            omega[i] = std::cos(2 * pi * i / N);
+        
+        for (int i = 0;i < n; i++)
+            omega[i] = std::cos(2 * pi * i / n);
 
-        for (int i = 0;i < N / 4; i++)
-            omega[N + i] = omega[i];
+        for (int i = 0;i < n / 4; i++)
+            omega[n + i] = omega[i];
 
-        if constexpr (N > 8)
+        if constexpr (n > 2)
             next.make_omega();
     }
 };
 
-template<>
-struct OmegaTabel<1> {};
+template<int N>
+struct OmegaTabel<N, 2> {
+    inline static float minus_sin[2];
+    inline static float cos[2];
+
+    static float* get_minus_sin() { return minus_sin; }
+    static float* get_cos() { return cos; }
+
+    static void make_omega() {
+        cos[0] = 1; // at 0 radians 
+        cos[1] = -1; // at pi radians
+        minus_sin[0] = minus_sin[1] = 0; // the height of the complex vector is zero at both 0 and pi
+    }
+};
 
 
 template<int n>
@@ -101,8 +119,8 @@ struct FFTPack : ComplexArrayFloat<n>
         even.butterfly(s, input);
         odd.butterfly(s + (N / n), input);
 
-        float* cos = OmegaTabel<n>::get_cos();
-        float* sin = OmegaTabel<n>::get_sin();
+        float* cos = OmegaTabel<N, n>::get_cos();
+        float* minus_sin = OmegaTabel<N, n>::get_minus_sin();
         /*
                 content << "real_before_cos_s" << s << "_n" << n << " = ";
                 write_plain_arr(cos, n / 2, 1, content);
@@ -125,8 +143,8 @@ struct FFTPack : ComplexArrayFloat<n>
 
         for (int i = 0; i < nby2; i++) {
 
-            float even_real = cos[i] * even.real[i] - sin[i] * even.imag[i];
-            float even_imag = cos[i] * even.imag[i] + sin[i] * even.real[i];
+            float even_real = cos[i] * even.real[i] + minus_sin[i] * even.imag[i];
+            float even_imag = cos[i] * even.imag[i] - minus_sin[i] * even.real[i];
 
             this->real[i] = odd.real[i] + even_real;
             this->imag[i] = odd.imag[i] + even_imag;
@@ -218,7 +236,7 @@ template <int k>
 struct ComplexNoise {
     static constexpr int sz = 1 << k;
     static constexpr int sz_sq = sz * sz;
-    static constexpr float standard = 1 / (float)(sz);
+    static constexpr float standard = 1 / (root2f * sz);
     ComplexArrayFloat<sz>* noise;
     float spectral_bias[sz_sq];
     inverse2DFFT<sz> fft;
@@ -256,6 +274,7 @@ struct ComplexNoise {
 
                 double dis = sqre(z - i - 1) + sqre(z - j - 1);
                 double scaled_dis = dis / (double)(z * z);
+
                 float val = std::exp(-(scaled_dis) / (2 * spec_radii * spec_radii));
 
                 set_vals(spectral_bias, val, { {i,j} , {is,j},{i,js},{is,js} });
@@ -281,23 +300,22 @@ struct ComplexNoise {
     }
 
     float spectral_power() {
-        double power;
-        for (int i = 0;i < sz_sq;i++) arr[i] power += sqre((double)spectral_bias[i]);
+
+        double power = 0;
+        for (int i = 0;i < sz_sq;i++)  power += sqre((double)spectral_bias[i]);
+
+        double res = std::sqrt(2 * power/sz) ;
+        std::cout << "power: " << res << "\n";
+        return res;
     }
+
+
     void apply_scaling(float* arr) {
         float scaling = spectral_power();
         for (int i = 0;i < sz_sq;i++) arr[i] /= scaling;
     }
 
 
-    void apply_spectral_bias() {
-        for (int i = 0; i < sz;i++) {
-            for (int j = 0; j < sz; j++) {
-                noise[i].real[j] *= spectral_bias[index(i, j)];
-                noise[i].imag[j] *= spectral_bias[index(i, j)];
-            }
-        }
-    }
 
     void apply_spectral_bias() {
         for (int i = 0; i < sz;i++) {
@@ -309,7 +327,7 @@ struct ComplexNoise {
     }
 
     ComplexNoise() {
-        OmegaTabel<sz>::make_omega();
+        OmegaTabel<sz, sz>::make_omega();
         noise = fft.input;
         //memset(noise, 0.f,sizeof(float)*sz*sz); // temporay for degugging;
         gen_seed();
@@ -323,8 +341,6 @@ void write_var_to(T& var, std::stringstream& stream, const char* lst_name) {
     stream << lst_name << " = ";
     stream << var << "\n";
 }
-
-
 
 
 template<typename T>
@@ -380,7 +396,7 @@ int main() {
     constexpr int sz = cn.sz;
     //cn.apply_spectral_bias();
     cn.inverse_fft();
-
+    OmegaTabel<grid_len, 2>::get_minus_sin();
     std::stringstream lst_string;
     std::ofstream list_file("bitmaplst.py");
 
@@ -398,6 +414,7 @@ int main() {
     float out_mag[cn.sz * cn.sz];
     make_arr(cn.fft.y_arr(), out_mag, mag_f);
 
+    cn.apply_scaling(out_mag);
     write_lst_to(out_mag, cn.sz, cn.sz, 1, lst_string, "out");
     write_lst_to(cn.spectral_bias, sz, sz, 1, lst_string, "spec");
 
