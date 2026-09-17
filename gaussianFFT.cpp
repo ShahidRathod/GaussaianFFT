@@ -279,6 +279,11 @@ struct ComplexNoise {
 
         noise[0].imag[0] = noise[z].imag[z] = noise[z].imag[sz - 1] = noise[sz - 1].imag[z] = 0;
     }
+
+    float spectral_power() {
+        double power;
+        for (int i = 0;i < sz_sq;i++) arr[i] power += sqre((double)spectral_bias[i]);
+    }
     void apply_scaling(float* arr) {
         float scaling = spectral_power();
         for (int i = 0;i < sz_sq;i++) arr[i] /= scaling;
@@ -380,8 +385,6 @@ int main() {
     std::ofstream list_file("bitmaplst.py");
 
     float scaling = cn.standard;
-
-
 
 
 
