@@ -103,25 +103,25 @@ struct FFTPack : ComplexArrayFloat<n>
 
         float* cos = OmegaTabel<n>::get_cos();
         float* sin = OmegaTabel<n>::get_sin();
-/*
-        content << "real_before_cos_s" << s << "_n" << n << " = ";
-        write_plain_arr(cos, n / 2, 1, content);
+        /*
+                content << "real_before_cos_s" << s << "_n" << n << " = ";
+                write_plain_arr(cos, n / 2, 1, content);
 
-        content << "real_before_sin_s" << s << "_n" << n << " = ";
-        write_plain_arr(sin, n / 2, 1, content);
+                content << "real_before_sin_s" << s << "_n" << n << " = ";
+                write_plain_arr(sin, n / 2, 1, content);
 
-        content << "real_before_even_s" << s << "_n" << n << " = ";
-        write_plain_arr(even.real, n / 2, 1, content);
+                content << "real_before_even_s" << s << "_n" << n << " = ";
+                write_plain_arr(even.real, n / 2, 1, content);
 
-        content << "imag_before_even_s" << s << "_n" << n << " = ";
-        write_plain_arr(even.imag, n / 2, 1, content);
+                content << "imag_before_even_s" << s << "_n" << n << " = ";
+                write_plain_arr(even.imag, n / 2, 1, content);
 
-        content << "real_before_odd_s" << s << "_n" << n << " = ";
-        write_plain_arr(odd.real, n / 2, 1, content);
+                content << "real_before_odd_s" << s << "_n" << n << " = ";
+                write_plain_arr(odd.real, n / 2, 1, content);
 
-        content << "imag_before_odd_s" << s << "_n" << n << " = ";
-        write_plain_arr(odd.imag, n / 2, 1, content);
-        */
+                content << "imag_before_odd_s" << s << "_n" << n << " = ";
+                write_plain_arr(odd.imag, n / 2, 1, content);
+                */
 
         for (int i = 0; i < nby2; i++) {
 
@@ -136,12 +136,12 @@ struct FFTPack : ComplexArrayFloat<n>
         }
 
 
-      /*  content << "real_after_this_s" << s << "_n" << n << " = ";
-        write_plain_arr(this->real, n, 1, content);
+        /*  content << "real_after_this_s" << s << "_n" << n << " = ";
+          write_plain_arr(this->real, n, 1, content);
 
-        content << "imag_after_this_s" << s << "_n" << n << " = ";
-        write_plain_arr(this->imag, n, 1, content);
-        */
+          content << "imag_after_this_s" << s << "_n" << n << " = ";
+          write_plain_arr(this->imag, n, 1, content);
+          */
     }
 };
 
@@ -168,11 +168,11 @@ struct FFTPack<1> : ComplexArrayFloat<1>
 struct Indx { int i, j; };
 
 
-template <int sz> 
+template <int sz>
 struct inverse2DFFT {
     static constexpr int sz_sq = sz * sz;
 
-    FFTPack<sz> input[sz*sz], fx[sz*sz],fy[sz*sz];
+    FFTPack<sz> input[sz * sz], fx[sz * sz], fy[sz * sz];
 
     inverse2DFFT() {}
 
@@ -180,7 +180,7 @@ struct inverse2DFFT {
     FFTPack<sz>* x_arr() { return &fx[0]; }
     FFTPack<sz>* y_arr() { return &fy[0]; }
 
-    void fft_of(FFTPack<sz>(& butrfly_inp)[sz * sz], FFTPack<sz>(&butrfly_out)[sz * sz]) {
+    void fft_of(FFTPack<sz>(&butrfly_inp)[sz * sz], FFTPack<sz>(&butrfly_out)[sz * sz]) {
 
         for (int i = 0; i < sz;i++)
             butrfly_out[i].template butterfly<sz>(0, butrfly_inp[i]);
@@ -197,15 +197,15 @@ struct inverse2DFFT {
                 float temp_imag = arr[i].imag[j];
                 arr[i].imag[j] = arr[j].imag[i];
                 arr[j].imag[i] = temp_imag;
-              
+
 
             }
-        } 
+        }
     }
-    
+
     void fft() {
-        fft_of(input,fx);
-        fft_of(fx,fy);
+        fft_of(input, fx);
+        fft_of(fx, fy);
     }
 };
 
@@ -217,13 +217,13 @@ constexpr double spec_radii = 0.1; // ranges from 0 -1
 template <int k>
 struct ComplexNoise {
     static constexpr int sz = 1 << k;
-    static constexpr int sz_sq = sz*sz;
-    static constexpr float standard =  1/ (float)(sz );
+    static constexpr int sz_sq = sz * sz;
+    static constexpr float standard = 1 / (float)(sz);
     ComplexArrayFloat<sz>* noise;
     float spectral_bias[sz_sq];
     inverse2DFFT<sz> fft;
     std::random_device seed_gen;
-    std::normal_distribution<float> normal{ 0.f, standard};
+    std::normal_distribution<float> normal{ 0.f, standard };
     int seed;
 
     void set_seed(int val) { seed = val; }
@@ -255,8 +255,8 @@ struct ComplexNoise {
                 int js = sz - j - 1;
 
                 double dis = sqre(z - i - 1) + sqre(z - j - 1);
-                double scaled_dis = dis / (double)(z*z);
-                float val = std::exp(-(scaled_dis)/(2*spec_radii*spec_radii));
+                double scaled_dis = dis / (double)(z * z);
+                float val = std::exp(-(scaled_dis) / (2 * spec_radii * spec_radii));
 
                 set_vals(spectral_bias, val, { {i,j} , {is,j},{i,js},{is,js} });
 
@@ -279,6 +279,11 @@ struct ComplexNoise {
 
         noise[0].imag[0] = noise[z].imag[z] = noise[z].imag[sz - 1] = noise[sz - 1].imag[z] = 0;
     }
+    void apply_scaling(float* arr) {
+        float scaling = spectral_power();
+        for (int i = 0;i < sz_sq;i++) arr[i] /= scaling;
+    }
+
 
     void apply_spectral_bias() {
         for (int i = 0; i < sz;i++) {
@@ -288,7 +293,16 @@ struct ComplexNoise {
             }
         }
     }
-    
+
+    void apply_spectral_bias() {
+        for (int i = 0; i < sz;i++) {
+            for (int j = 0; j < sz; j++) {
+                noise[i].real[j] *= spectral_bias[index(i, j)];
+                noise[i].imag[j] *= spectral_bias[index(i, j)];
+            }
+        }
+    }
+
     ComplexNoise() {
         OmegaTabel<sz>::make_omega();
         noise = fft.input;
@@ -300,16 +314,16 @@ struct ComplexNoise {
 
 
 template<typename T>
-void write_var_to(T& var,std::stringstream& stream, const char* lst_name) {
-    stream<< lst_name << " = ";
-    stream << var<<"\n";
+void write_var_to(T& var, std::stringstream& stream, const char* lst_name) {
+    stream << lst_name << " = ";
+    stream << var << "\n";
 }
 
 
 
 
 template<typename T>
-T clip (T val ,T min, T max ) {
+T clip(T val, T min, T max) {
     if (min < val < max) return val;
     else if (val < min) return min;
     return max;
@@ -317,10 +331,10 @@ T clip (T val ,T min, T max ) {
 }
 
 template <int sz>
-void make_arr(ComplexArrayFloat<sz>* input, float* arr, float (*func)(float,float)) {
+void make_arr(ComplexArrayFloat<sz>* input, float* arr, float (*func)(float, float)) {
     for (int i = 0; i < sz;i++) {
         for (int j = 0; j < sz; j++) {
-            arr[i * sz + j] = func(input[i].real[j],input[i].imag[j]);
+            arr[i * sz + j] = func(input[i].real[j], input[i].imag[j]);
         }
     }
 }
@@ -328,9 +342,9 @@ void make_arr(ComplexArrayFloat<sz>* input, float* arr, float (*func)(float,floa
 constexpr long long int grid_pow = 8;
 constexpr long int grid_len = 1 << 2 * grid_pow;
 
-float mag_f(float a , float b) {
-    
-    return std::sqrt(sqre(a)+sqre(b))/(spec_radii*spec_radii);
+float mag_f(float a, float b) {
+
+    return std::sqrt(sqre(a) + sqre(b));
 
 }
 
@@ -346,7 +360,7 @@ float hue_func(float a, float b) {
     return (std::atan(b / a) + pi) / (2 * pi);
 }
 
- 
+
 #define OmegaTabelWrite(tabelno,iterno) \
 lst_string << "omega" << tabelno << " = ";\
 write_plain_arr(OmegaTabel<tabelno>::get_cos(), tabelno, 1, lst_string);\
@@ -355,11 +369,11 @@ write_plain_arr(OmegaTabel<tabelno>::get_cos(), tabelno, 1, lst_string);\
 
 int main() {
 
-  
+
 
     static ComplexNoise<grid_pow> cn;
     constexpr int sz = cn.sz;
-    cn.apply_spectral_bias();
+    //cn.apply_spectral_bias();
     cn.inverse_fft();
 
     std::stringstream lst_string;
@@ -367,26 +381,26 @@ int main() {
 
     float scaling = cn.standard;
 
-    
 
-    
+
+
 
     float mag[cn.sz * cn.sz];
     make_arr(cn.noise, mag, real);
 
-  
+
     float hue[cn.sz * cn.sz];
     make_arr(cn.noise, hue, hue_func);
-    
+
     float out_mag[cn.sz * cn.sz];
-    make_arr(cn.fft.y_arr(),out_mag,mag_f);
+    make_arr(cn.fft.y_arr(), out_mag, mag_f);
 
     write_lst_to(out_mag, cn.sz, cn.sz, 1, lst_string, "out");
     write_lst_to(cn.spectral_bias, sz, sz, 1, lst_string, "spec");
 
-    write_var_to(sz,lst_string,"sz");
+    write_var_to(sz, lst_string, "sz");
     int iterno = 0;
-  
+
 
     list_file << lst_string.rdbuf();
     list_file.close();
