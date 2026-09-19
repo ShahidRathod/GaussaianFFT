@@ -12,16 +12,55 @@
 #include <numbers>
 
 
-void write_plain_arr(float* arr, int sz, int stride, std::stringstream& lst_string) {
+template <typename T, int sz>
+struct ComplexArray {
+    T real[sz], imag[sz];
+};
 
+std::stringstream content;
+
+template <int n> using ComplexArrayFloat = ComplexArray<float, n>;
+using ComplexT = ComplexArrayFloat<1>;
+
+constexpr float pi = std::numbers::pi_v<float>;
+constexpr float root2f = std::numbers::sqrt2_v<float>;
+
+constexpr int arrsz(int k, int d) { return 1 << (k * d); }
+inline int pow2(int n) { return 1 << n; };
+
+template <typename T>
+inline T sqre(T x) { return x * x; };
+
+
+float mag_f(float a, float b) { return std::sqrt(sqre(a) + sqre(b)); }
+float real(float a, float b) { return 0 * a + 1 * std::abs(a); }
+float imag(float a, float b) { return std::abs(a); }
+float hue_func(float a, float b) { return (std::atan(b / a) + pi) / (2 * pi); }
+
+
+template <int sz>
+void make_arr(ComplexArrayFloat<sz>* input, float* arr, float (*func)(float, float)) {
+    for (int i = 0; i < sz; i++) {
+        for (int j = 0; j < sz; j++) {
+            arr[i * sz + j] = func(input[i].real[j], input[i].imag[j]);
+        }
+    }
+}
+
+template<typename T>
+void write_var_to(T& var, std::stringstream& stream, const char* lst_name) {
+    stream << lst_name << " = ";
+    stream << var << "\n";
+}
+
+
+void write_plain_arr(float* arr, int sz, int stride, std::stringstream& lst_string) {
     lst_string << "[";
-    for (int j = 0; j < sz; j++)
-    {
+    for (int j = 0; j < sz; j++) {
         float lst_val = arr[j * stride];
         lst_string << lst_val;
         if (j != sz - 1) lst_string << ",";
     }
-
     lst_string << "]\n";
 }
 
@@ -33,40 +72,16 @@ void write_plain_lst(float* arr, int sz, int stride, std::stringstream& lst_stri
 }
 
 void write_lst_to(float* arr, int sz, int d, int stride, std::stringstream& lst_string, const char* lst_name) {
-
     lst_string << lst_name;
     lst_string << " = [\n";
-    for (int i = 0; i < sz; i++)
-    {
+    for (int i = 0; i < sz; i++) {
         write_plain_arr(arr + d * i, sz, stride, lst_string);
         if (i != sz - 1) lst_string << ",";
     }
     lst_string << "]\n";
-
 }
 
-template <typename T, int sz>
-struct ComplexArray {
-    T real[sz], imag[sz];
-};
 
-std::stringstream content;
-
-template <int n> using ComplexArrayFloat = ComplexArray<float, n>;
-using ComplexT = ComplexArrayFloat<1>;
-
-
-constexpr float pi = std::numbers::pi_v<float>;
-constexpr float root2f = std::numbers::sqrt2_v<float>;
-//constexpr float root2f = std::numbers::sqrt2_v<float>;
-
-constexpr int arrsz(int k, int d) { return 1 << (k * d); }
-inline int pow2(int n) { return 1 << n; };
-
-
-
-template <typename T>
-inline T sqre(T x) { return x * x; };
 
 
 template<int N, int n>
@@ -78,11 +93,10 @@ struct OmegaTabel {
     static float* get_cos() { return omega; }
 
     static void make_omega() {
-        
-        for (int i = 0;i < n; i++)
+        for (int i = 0; i < n; i++)
             omega[i] = std::cos(2 * pi * i / n);
 
-        for (int i = 0;i < n / 4; i++)
+        for (int i = 0; i < n / 4; i++)
             omega[n + i] = omega[i];
 
         if constexpr (n > 2)
@@ -99,12 +113,11 @@ struct OmegaTabel<N, 2> {
     static float* get_cos() { return cos; }
 
     static void make_omega() {
-        cos[0] = 1; // at 0 radians 
-        cos[1] = -1; // at pi radians
-        minus_sin[0] = minus_sin[1] = 0; // the height of the complex vector is zero at both 0 and pi
+        cos[0] = 1;
+        cos[1] = -1;
+        minus_sin[0] = minus_sin[1] = 0;
     }
 };
-
 
 template<int n>
 struct FFTPack : ComplexArrayFloat<n>
@@ -112,39 +125,17 @@ struct FFTPack : ComplexArrayFloat<n>
     static constexpr int nby2 = n / 2;
     static FFTPack<n / 2> even, odd;
 
-
-
     template<int N>
-    inline void butterfly(int s, FFTPack<N>& input) {
-        even.butterfly(s, input);
-        odd.butterfly(s + (N / n), input);
+    inline void butterfly(int s, FFTPack<N>& input, int sign) {
+        even.butterfly(s, input, sign);
+        odd.butterfly(s + (N / n), input, sign);
 
         float* cos = OmegaTabel<N, n>::get_cos();
         float* minus_sin = OmegaTabel<N, n>::get_minus_sin();
-        /*
-                content << "real_before_cos_s" << s << "_n" << n << " = ";
-                write_plain_arr(cos, n / 2, 1, content);
-
-                content << "real_before_sin_s" << s << "_n" << n << " = ";
-                write_plain_arr(sin, n / 2, 1, content);
-
-                content << "real_before_even_s" << s << "_n" << n << " = ";
-                write_plain_arr(even.real, n / 2, 1, content);
-
-                content << "imag_before_even_s" << s << "_n" << n << " = ";
-                write_plain_arr(even.imag, n / 2, 1, content);
-
-                content << "real_before_odd_s" << s << "_n" << n << " = ";
-                write_plain_arr(odd.real, n / 2, 1, content);
-
-                content << "imag_before_odd_s" << s << "_n" << n << " = ";
-                write_plain_arr(odd.imag, n / 2, 1, content);
-                */
 
         for (int i = 0; i < nby2; i++) {
-
-            float even_real = cos[i] * even.real[i] + minus_sin[i] * even.imag[i];
-            float even_imag = cos[i] * even.imag[i] - minus_sin[i] * even.real[i];
+            float even_real = cos[i] * even.real[i] +   minus_sin[i] * even.imag[i];
+            float even_imag = cos[i] * even.imag[i] +   minus_sin[i] * even.real[i];
 
             this->real[i] = odd.real[i] + even_real;
             this->imag[i] = odd.imag[i] + even_imag;
@@ -152,17 +143,18 @@ struct FFTPack : ComplexArrayFloat<n>
             this->real[i + nby2] = odd.real[i] - even_real;
             this->imag[i + nby2] = odd.imag[i] - even_imag;
         }
+    }
 
+    template<int N>
+    inline void invrs_fft(FFTPack<N>& input) {
+        butterfly(0, input, -1); // -minus_sin = sin
+    }
 
-        /*  content << "real_after_this_s" << s << "_n" << n << " = ";
-          write_plain_arr(this->real, n, 1, content);
-
-          content << "imag_after_this_s" << s << "_n" << n << " = ";
-          write_plain_arr(this->imag, n, 1, content);
-          */
+    template<int N>
+    inline void fft(FFTPack<N>& input) {
+        butterfly(0, input, 1); // minus_sin = -sin
     }
 };
-
 
 template<int n>
 FFTPack<n / 2> FFTPack<n>::even;
@@ -170,44 +162,33 @@ FFTPack<n / 2> FFTPack<n>::even;
 template<int n>
 FFTPack<n / 2> FFTPack<n>::odd;
 
-
 template<>
 struct FFTPack<1> : ComplexArrayFloat<1>
 {
     template<int N>
-    inline void butterfly(int s, FFTPack<N>& input) {
-
+    inline void butterfly(int s, FFTPack<N>& input, int sign) {
         real[0] = input.real[s];
         imag[0] = input.imag[s];
     }
 };
 
-
 struct Indx { int i, j; };
 
-
 template <int sz>
-struct inverse2DFFT {
+struct FFT2D {
     static constexpr int sz_sq = sz * sz;
 
     FFTPack<sz> input[sz * sz], fx[sz * sz], fy[sz * sz];
 
-    inverse2DFFT() {}
+    FFT2D() {}
 
     FFTPack<sz>* output() { return &fy[0]; }
     FFTPack<sz>* x_arr() { return &fx[0]; }
     FFTPack<sz>* y_arr() { return &fy[0]; }
 
-    void fft_of(FFTPack<sz>(&butrfly_inp)[sz * sz], FFTPack<sz>(&butrfly_out)[sz * sz]) {
-
-        for (int i = 0; i < sz;i++)
-            butrfly_out[i].template butterfly<sz>(0, butrfly_inp[i]);
-
-        //transpose
-        ComplexArrayFloat<sz>* arr = &butrfly_out[0];
+    void transpose(ComplexArrayFloat<sz>* arr) {
         for (int i = 0; i < sz; i++) {
             for (int j = i; j < sz; j++) {
-
                 float temp_real = arr[i].real[j];
                 arr[i].real[j] = arr[j].real[i];
                 arr[j].real[i] = temp_real;
@@ -215,215 +196,198 @@ struct inverse2DFFT {
                 float temp_imag = arr[i].imag[j];
                 arr[i].imag[j] = arr[j].imag[i];
                 arr[j].imag[i] = temp_imag;
-
-
             }
         }
     }
 
-    void fft() {
-        fft_of(input, fx);
-        fft_of(fx, fy);
+
+    void fft_of(FFTPack<sz>(&butrfly_inp)[sz * sz],
+        FFTPack<sz>(&butrfly_out)[sz * sz],
+        int sign) {
+        for (int i = 0; i < sz; i++)
+            butrfly_out[i].template butterfly<sz>(0, butrfly_inp[i], sign);
+        transpose(&butrfly_out[0]);
     }
+
+    void make_out_in() {
+        memcpy(input, fy, sizeof(input));
+    }
+
+    // forward fft we use minus_sin
+    void fft() {
+        fft_of(input, fx, 1);
+        fft_of(fx, fy, 1);
+    }
+
+    // inverse fft not minus_sin we use sin
+    void inverse_fft() {
+        fft_of(input, fx, -1);
+        fft_of(fx, fy, -1);
+    }
+  
 };
 
-
-
-
-constexpr double spec_radii = 0.1; // ranges from 0 -1 
+constexpr double spec_radii = 0.01;
 
 template <int k>
 struct ComplexNoise {
     static constexpr int sz = 1 << k;
     static constexpr int sz_sq = sz * sz;
     static constexpr float standard = 1 / (root2f * sz);
+
     ComplexArrayFloat<sz>* noise;
     float spectral_bias[sz_sq];
-    inverse2DFFT<sz> fft;
+    FFT2D<sz> fft;
     std::random_device seed_gen;
     std::normal_distribution<float> normal{ 0.f, standard };
+    std::default_random_engine engine;
     int seed;
+    void set_seed(int val) { seed = val; engine.seed(seed); }
+    void gen_seed() { set_seed(seed_gen()); }
 
-    void set_seed(int val) { seed = val; }
-    void gen_seed() {
-        seed = seed_gen();
-    }
-
-    void inverse_fft() {
-        fft.fft();
-    }
+    void inverse_fft() { fft.inverse_fft(); }
 
     inline int index(int i, int j) { return i + sz * j; }
 
-
     template<typename T>
-    void set_vals(T* arr, T val, std::initializer_list <Indx> lst) {
+    void set_vals(T* arr, T val, std::initializer_list<Indx> lst) {
         for (auto& x : lst) arr[index(x.i, x.j)] = val;
     }
-
-
-    void init_arrays() {
-
-        auto normal_gen = std::bind(normal, std::default_random_engine(seed));
+    
+    void init_noise() {
+        gen_seed();
         int z = sz / 2;
         for (int i = 0; i < z; i++) {
             for (int j = 0; j < z; j++) {
+                int is = sz - i - 1;
+                int js = sz - j - 1;
 
+                noise[i].real[j] = noise[is].real[js] = normal(engine);
+                noise[is].real[j] = noise[i].real[js] = normal(engine);
+
+                float conj1 = normal(engine);
+                noise[i].imag[j] = conj1;
+                noise[is].imag[js] = -conj1;
+
+                float conj2 = normal(engine);
+                noise[is].imag[j] = conj2;
+                noise[i].imag[js] = -conj2;
+            }
+        }
+
+        noise[0].imag[0] = 0;
+        noise[z].imag[z] = 0;
+        noise[z].imag[sz - 1] = 0;
+        noise[sz - 1].imag[z] = 0;
+    }
+
+    void init_spectral_bias() {
+        int z = sz / 2;
+        for (int i = 0; i < z; i++) {
+            for (int j = 0; j < z; j++) {
                 int is = sz - i - 1;
                 int js = sz - j - 1;
 
                 double dis = sqre(z - i - 1) + sqre(z - j - 1);
                 double scaled_dis = dis / (double)(z * z);
 
-                float val = std::exp(-(scaled_dis) / (2 * spec_radii * spec_radii));
+                double val = std::pow(1 + std::pow(scaled_dis / spec_radii, 2), -2);
 
-                set_vals(spectral_bias, val, { {i,j} , {is,j},{i,js},{is,js} });
+                //double val = (i == j == z - 1) ? 1 : 0.1;
 
-                noise[i].real[j] = noise[is].real[js] = normal_gen();
-                noise[is].real[j] = noise[i].real[js] = normal_gen();
-
-                float conj1 = normal_gen();
-
-                noise[i].imag[j] = conj1;
-                noise[is].imag[js] = -conj1;
-
-                float conj2 = normal_gen();
-
-                noise[is].imag[j] = conj2;
-                noise[i].imag[js] = -conj2;
-
+                set_vals(spectral_bias, (float)val,
+                    { {i,j}, {is,j}, {i,js}, {is,js} });
             }
         }
-
-
-        noise[0].imag[0] = noise[z].imag[z] = noise[z].imag[sz - 1] = noise[sz - 1].imag[z] = 0;
     }
 
     float spectral_power() {
-
         double power = 0;
-        for (int i = 0;i < sz_sq;i++)  power += sqre((double)spectral_bias[i]);
+        for (int i = 0; i < sz_sq; i++) power += sqre((double)spectral_bias[i]);
 
-        double res = std::sqrt(2 * power/sz) ;
+        double res = pi * std::sqrt(power) / sz;
         std::cout << "power: " << res << "\n";
         return res;
     }
 
-
     void apply_scaling(float* arr) {
         float scaling = spectral_power();
-        for (int i = 0;i < sz_sq;i++) arr[i] /= scaling;
+        for (int i = 0; i < sz_sq; i++) arr[i] /= scaling;
     }
 
-
-
     void apply_spectral_bias() {
-        for (int i = 0; i < sz;i++) {
+        for (int i = 0; i < sz; i++) {
             for (int j = 0; j < sz; j++) {
                 noise[i].real[j] *= spectral_bias[index(i, j)];
                 noise[i].imag[j] *= spectral_bias[index(i, j)];
             }
         }
     }
+    void colored_noise(float* hue,float* inten) {
+        make_arr(noise,hue,hue_func);
+        make_arr(noise,inten,mag_f);
+        std::cout<<"inten ";
+        apply_scaling(inten);
+    }
+    void output_grayscale(float* mag_arr) {
+        make_arr(&(fft.output())[0], mag_arr, mag_f);
+        apply_scaling(mag_arr);
+    }
 
     ComplexNoise() {
         OmegaTabel<sz, sz>::make_omega();
         noise = fft.input;
-        //memset(noise, 0.f,sizeof(float)*sz*sz); // temporay for degugging;
-        gen_seed();
-        init_arrays();
+        init_noise();
+        init_spectral_bias();
     }
 };
 
 
-template<typename T>
-void write_var_to(T& var, std::stringstream& stream, const char* lst_name) {
-    stream << lst_name << " = ";
-    stream << var << "\n";
-}
-
-
-template<typename T>
-T clip(T val, T min, T max) {
-    if (min < val < max) return val;
-    else if (val < min) return min;
-    return max;
-
-}
-
-template <int sz>
-void make_arr(ComplexArrayFloat<sz>* input, float* arr, float (*func)(float, float)) {
-    for (int i = 0; i < sz;i++) {
-        for (int j = 0; j < sz; j++) {
-            arr[i * sz + j] = func(input[i].real[j], input[i].imag[j]);
-        }
-    }
-}
-
 constexpr long long int grid_pow = 8;
 constexpr long int grid_len = 1 << 2 * grid_pow;
 
-float mag_f(float a, float b) {
 
-    return std::sqrt(sqre(a) + sqre(b));
+static ComplexNoise<grid_pow> cn;
+constexpr int sz = cn.sz;
 
-}
-
-float real(float a, float b) {
-    return a;
-}
-
-float imag(float a, float b) {
-    return a;
-}
-
-float hue_func(float a, float b) {
-    return (std::atan(b / a) + pi) / (2 * pi);
-}
-
-
-#define OmegaTabelWrite(tabelno,iterno) \
-lst_string << "omega" << tabelno << " = ";\
-write_plain_arr(OmegaTabel<tabelno>::get_cos(), tabelno, 1, lst_string);\
-\
 
 
 int main() {
 
+    float mag[sz * sz];
+    float out_mag[sz * sz];
+    float hue[sz * sz];
 
-
-    static ComplexNoise<grid_pow> cn;
-    constexpr int sz = cn.sz;
-    //cn.apply_spectral_bias();
-    cn.inverse_fft();
-    OmegaTabel<grid_len, 2>::get_minus_sin();
     std::stringstream lst_string;
-    std::ofstream list_file("bitmaplst.py");
+    std::ofstream list_file("lists.py");
+    write_var_to(sz, lst_string, "sz");
 
-    float scaling = cn.standard;
+    cn.apply_spectral_bias();
+    cn.fft.inverse_fft();
 
-
-
-    float mag[cn.sz * cn.sz];
-    make_arr(cn.noise, mag, real);
-
-
-    float hue[cn.sz * cn.sz];
-    make_arr(cn.noise, hue, hue_func);
-
-    float out_mag[cn.sz * cn.sz];
-    make_arr(cn.fft.y_arr(), out_mag, mag_f);
-
-    cn.apply_scaling(out_mag);
-    write_lst_to(out_mag, cn.sz, cn.sz, 1, lst_string, "out");
+    cn.output_grayscale(out_mag);
+    write_lst_to(out_mag, sz, sz, 1, lst_string, "out");
+    
     write_lst_to(cn.spectral_bias, sz, sz, 1, lst_string, "spec");
 
-    write_var_to(sz, lst_string, "sz");
-    int iterno = 0;
+    memcpy(cn.spectral_bias, out_mag, sizeof(out_mag));
+    cn.init_noise();
+    cn.apply_spectral_bias();
 
+    cn.colored_noise(hue,mag);
+    //for (int i = 0; i < sz * sz;i++) mag[i] *= 0.5e3;
+
+    write_lst_to(mag, sz, sz, 1, lst_string, "inten");
+    write_lst_to(hue, sz, sz, 1, lst_string, "hue");
+
+    cn.fft.inverse_fft();
+    cn.output_grayscale(out_mag);
+
+    write_lst_to(out_mag, sz, sz, 1, lst_string, "out2");
+    write_lst_to(cn.spectral_bias, sz, sz, 1, lst_string, "spec2");
 
     list_file << lst_string.rdbuf();
     list_file.close();
     system("py bitmap.py");
-    //system("py verifier.py");
+
 }
