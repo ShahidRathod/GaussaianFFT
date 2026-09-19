@@ -82,8 +82,6 @@ void write_lst_to(float* arr, int sz, int d, int stride, std::stringstream& lst_
 }
 
 
-
-
 template<int N, int n>
 struct OmegaTabel {
     inline static float omega[n + n / 4];
@@ -119,6 +117,8 @@ struct OmegaTabel<N, 2> {
     }
 };
 
+
+
 template<int n>
 struct FFTPack : ComplexArrayFloat<n>
 {
@@ -134,8 +134,8 @@ struct FFTPack : ComplexArrayFloat<n>
         float* minus_sin = OmegaTabel<N, n>::get_minus_sin();
 
         for (int i = 0; i < nby2; i++) {
-            float even_real = cos[i] * even.real[i] +   minus_sin[i] * even.imag[i];
-            float even_imag = cos[i] * even.imag[i] +   minus_sin[i] * even.real[i];
+            float even_real = cos[i] * even.real[i] + sign * (-minus_sin[i]) * even.imag[i];
+            float even_imag = cos[i] * even.imag[i] - sign * (-minus_sin[i]) * even.real[i];
 
             this->real[i] = odd.real[i] + even_real;
             this->imag[i] = odd.imag[i] + even_imag;
@@ -172,6 +172,10 @@ struct FFTPack<1> : ComplexArrayFloat<1>
     }
 };
 
+template <typename T, int sz>
+void FFT(ComplexArray<T,sz>& input , ComplexArray<T,sz>& output) {
+
+}
 struct Indx { int i, j; };
 
 template <int sz>
@@ -213,13 +217,13 @@ struct FFT2D {
         memcpy(input, fy, sizeof(input));
     }
 
-    // forward fft we use minus_sin
+    // Forward FFT: sign = -1
     void fft() {
         fft_of(input, fx, 1);
         fft_of(fx, fy, 1);
     }
 
-    // inverse fft not minus_sin we use sin
+    // Inverse FFT: sign = +1
     void inverse_fft() {
         fft_of(input, fx, -1);
         fft_of(fx, fy, -1);
@@ -227,7 +231,7 @@ struct FFT2D {
   
 };
 
-constexpr double spec_radii = 0.01;
+constexpr double spec_radii = 0.0001;
 
 template <int k>
 struct ComplexNoise {
@@ -236,6 +240,8 @@ struct ComplexNoise {
     static constexpr float standard = 1 / (root2f * sz);
 
     ComplexArrayFloat<sz>* noise;
+    float ref_landscp[sz_sq];
+    float output[sz_sq];
     float spectral_bias[sz_sq];
     FFT2D<sz> fft;
     std::random_device seed_gen;
@@ -291,8 +297,7 @@ struct ComplexNoise {
                 double dis = sqre(z - i - 1) + sqre(z - j - 1);
                 double scaled_dis = dis / (double)(z * z);
 
-                double val = std::pow(1 + std::pow(scaled_dis / spec_radii, 2), -2);
-
+                double val = std::pow(1 + std::pow(scaled_dis / spec_radii, 1), -1);
                 //double val = (i == j == z - 1) ? 1 : 0.1;
 
                 set_vals(spectral_bias, (float)val,
@@ -306,7 +311,7 @@ struct ComplexNoise {
         for (int i = 0; i < sz_sq; i++) power += sqre((double)spectral_bias[i]);
 
         double res = pi * std::sqrt(power) / sz;
-        std::cout << "power: " << res << "\n";
+        //std::cout << "power: " << res << "\n";
         return res;
     }
 
@@ -323,15 +328,39 @@ struct ComplexNoise {
             }
         }
     }
-    void colored_noise(float* hue,float* inten) {
-        make_arr(noise,hue,hue_func);
-        make_arr(noise,inten,mag_f);
-        std::cout<<"inten ";
+
+    void colored_noise(float* hue, float* inten) {
+        make_arr(noise, hue, hue_func);
+        make_arr(noise, inten, mag_f);
+        apply_scaling(inten);
+    }
+
+    void grayscale_noise(float* hue, float* inten) {
+        make_arr(noise, hue, hue_func);
+        make_arr(noise, inten, mag_f);
         apply_scaling(inten);
     }
     void output_grayscale(float* mag_arr) {
         make_arr(&(fft.output())[0], mag_arr, mag_f);
         apply_scaling(mag_arr);
+    }
+    
+    void output_colored(float* hue,float* inten) {
+        make_arr(&(fft.output())[0],hue, hue_func);
+        make_arr(&(fft.output())[0], inten, mag_f);
+        apply_scaling(inten);
+    }
+    
+    void new_landscp() {
+        for (int i = 0; i < sz; i++) {
+            memcpy(&fft.fx[i].real, ref_landscp + i, sizeof(float) * sz);
+        }
+
+        fft.fft();
+        make_arr(&(fft.output())[0],spectral_bias,mag_f);
+        init_noise();
+        apply_spectral_bias();
+        fft.inverse_fft();
     }
 
     ComplexNoise() {
@@ -353,41 +382,32 @@ constexpr int sz = cn.sz;
 
 
 int main() {
-
-    float mag[sz * sz];
     float out_mag[sz * sz];
-    float hue[sz * sz];
-
     std::stringstream lst_string;
     std::ofstream list_file("lists.py");
-    write_var_to(sz, lst_string, "sz");
+        write_var_to(sz, lst_string, "sz");
 
-    cn.apply_spectral_bias();
-    cn.fft.inverse_fft();
+        cn.apply_spectral_bias();
+        cn.fft.inverse_fft();
+        cn.output_grayscale(out_mag);
+        write_lst_to(out_mag, sz, sz, 1, lst_string, "out");
+        write_lst_to(cn.spectral_bias, sz, sz, 1, lst_string, "spec");
 
-    cn.output_grayscale(out_mag);
-    write_lst_to(out_mag, sz, sz, 1, lst_string, "out");
-    
-    write_lst_to(cn.spectral_bias, sz, sz, 1, lst_string, "spec");
+        cn.fft.make_out_in();
+        cn.fft.fft();
+        cn.output_grayscale(out_mag);
+        write_lst_to(out_mag, sz, sz, 1, lst_string, "spec2");
 
-    memcpy(cn.spectral_bias, out_mag, sizeof(out_mag));
-    cn.init_noise();
-    cn.apply_spectral_bias();
+        memcpy(cn.spectral_bias, out_mag, sizeof(out_mag));
 
-    cn.colored_noise(hue,mag);
-    //for (int i = 0; i < sz * sz;i++) mag[i] *= 0.5e3;
+        cn.init_noise();
+        cn.apply_spectral_bias();
+        cn.fft.inverse_fft();
+        cn.output_grayscale(out_mag);
+        write_lst_to(out_mag, sz, sz, 1, lst_string, "out2");
 
-    write_lst_to(mag, sz, sz, 1, lst_string, "inten");
-    write_lst_to(hue, sz, sz, 1, lst_string, "hue");
-
-    cn.fft.inverse_fft();
-    cn.output_grayscale(out_mag);
-
-    write_lst_to(out_mag, sz, sz, 1, lst_string, "out2");
-    write_lst_to(cn.spectral_bias, sz, sz, 1, lst_string, "spec2");
-
-    list_file << lst_string.rdbuf();
-    list_file.close();
-    system("py bitmap.py");
+        list_file << lst_string.rdbuf();
+        list_file.close();
+        system("py bitmap.py");
 
 }
