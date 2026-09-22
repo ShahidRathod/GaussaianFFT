@@ -173,7 +173,7 @@ struct FFTPack<1> : ComplexArrayFloat<1>
 };
 
 template <typename T, int sz>
-void FFT(ComplexArray<T,sz>& input , ComplexArray<T,sz>& output) {
+void FFT(ComplexArray<T, sz>& input, ComplexArray<T, sz>& output) {
 
 }
 struct Indx { int i, j; };
@@ -182,7 +182,7 @@ template <int sz>
 struct FFT2D {
     static constexpr int sz_sq = sz * sz;
 
-    FFTPack<sz> input[sz * sz], fx[sz * sz], fy[sz * sz];
+    FFTPack<sz> input[sz], fx[sz], fy[sz];
 
     FFT2D() {}
 
@@ -205,8 +205,8 @@ struct FFT2D {
     }
 
 
-    void fft_of(FFTPack<sz>(&butrfly_inp)[sz * sz],
-        FFTPack<sz>(&butrfly_out)[sz * sz],
+    void fft_of(FFTPack<sz>(&butrfly_inp)[sz],
+        FFTPack<sz>(&butrfly_out)[sz],
         int sign) {
         for (int i = 0; i < sz; i++)
             butrfly_out[i].template butterfly<sz>(0, butrfly_inp[i], sign);
@@ -228,7 +228,7 @@ struct FFT2D {
         fft_of(input, fx, -1);
         fft_of(fx, fy, -1);
     }
-  
+
 };
 
 constexpr double spec_radii = 0.0001;
@@ -259,7 +259,7 @@ struct ComplexNoise {
     void set_vals(T* arr, T val, std::initializer_list<Indx> lst) {
         for (auto& x : lst) arr[index(x.i, x.j)] = val;
     }
-    
+
     void init_noise() {
         gen_seed();
         int z = sz / 2;
@@ -317,12 +317,14 @@ struct ComplexNoise {
 
     void apply_scaling(float* arr) {
         float scaling = spectral_power();
+        std::cout << "scaling: " << scaling<<"\n";
         for (int i = 0; i < sz_sq; i++) arr[i] /= scaling;
     }
 
     void apply_spectral_bias() {
         for (int i = 0; i < sz; i++) {
             for (int j = 0; j < sz; j++) {
+                spectral_bias[index(i, j)] = 1;
                 noise[i].real[j] *= spectral_bias[index(i, j)];
                 noise[i].imag[j] *= spectral_bias[index(i, j)];
             }
@@ -344,20 +346,20 @@ struct ComplexNoise {
         make_arr(&(fft.output())[0], mag_arr, mag_f);
         apply_scaling(mag_arr);
     }
-    
-    void output_colored(float* hue,float* inten) {
-        make_arr(&(fft.output())[0],hue, hue_func);
+
+    void output_colored(float* hue, float* inten) {
+        make_arr(&(fft.output())[0], hue, hue_func);
         make_arr(&(fft.output())[0], inten, mag_f);
         apply_scaling(inten);
     }
-    
+
     void new_landscp() {
         for (int i = 0; i < sz; i++) {
             memcpy(&fft.fx[i].real, ref_landscp + i, sizeof(float) * sz);
         }
 
         fft.fft();
-        make_arr(&(fft.output())[0],spectral_bias,mag_f);
+        make_arr(&(fft.output())[0], spectral_bias, mag_f);
         init_noise();
         apply_spectral_bias();
         fft.inverse_fft();
@@ -375,39 +377,29 @@ struct ComplexNoise {
 constexpr long long int grid_pow = 8;
 constexpr long int grid_len = 1 << 2 * grid_pow;
 
-
 static ComplexNoise<grid_pow> cn;
 constexpr int sz = cn.sz;
 
 
-
 int main() {
+
     float out_mag[sz * sz];
+    float hue[sz * sz];
+    float inten[sz * sz];
+
     std::stringstream lst_string;
     std::ofstream list_file("lists.py");
-        write_var_to(sz, lst_string, "sz");
+    write_var_to(sz, lst_string, "sz");
 
-        cn.apply_spectral_bias();
-        cn.fft.inverse_fft();
-        cn.output_grayscale(out_mag);
-        write_lst_to(out_mag, sz, sz, 1, lst_string, "out");
-        write_lst_to(cn.spectral_bias, sz, sz, 1, lst_string, "spec");
+    cn.apply_spectral_bias();
+    cn.fft.fft();
+    cn.output_colored(hue,inten);
 
-        cn.fft.make_out_in();
-        cn.fft.fft();
-        cn.output_grayscale(out_mag);
-        write_lst_to(out_mag, sz, sz, 1, lst_string, "spec2");
+    write_lst_to(hue,sz,sz,1,lst_string,"hue");
+    write_lst_to(inten, sz, sz, 1, lst_string, "inten");
 
-        memcpy(cn.spectral_bias, out_mag, sizeof(out_mag));
-
-        cn.init_noise();
-        cn.apply_spectral_bias();
-        cn.fft.inverse_fft();
-        cn.output_grayscale(out_mag);
-        write_lst_to(out_mag, sz, sz, 1, lst_string, "out2");
-
-        list_file << lst_string.rdbuf();
-        list_file.close();
-        system("py bitmap.py");
+    list_file << lst_string.rdbuf();
+    list_file.close();
+    system("py bitmap.py");
 
 }
