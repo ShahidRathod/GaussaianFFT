@@ -35,7 +35,9 @@ inline T sqre(T x) { return x * x; };
 float mag_f(float a, float b) { return std::sqrt(sqre(a) + sqre(b)); }
 float real(float a, float b) { return 0 * a + 1 * std::abs(a); }
 float imag(float a, float b) { return std::abs(a); }
-float hue_func(float a, float b) { return (std::atan(b / a) + pi) / (2 * pi); }
+
+float hue_func(float a, float b) { return (std::atan(b/ a) + pi) / (2 * pi); }
+//float hue_func(float a, float b) { return (std::atan2(b , a) + pi) / (2 * pi); }
 
 
 template <int sz>
@@ -143,6 +145,7 @@ struct FFTPack : ComplexArrayFloat<n>
             this->real[i + nby2] = odd.real[i] - even_real;
             this->imag[i + nby2] = odd.imag[i] - even_imag;
         }
+
     }
 
     template<int N>
@@ -172,10 +175,7 @@ struct FFTPack<1> : ComplexArrayFloat<1>
     }
 };
 
-template <typename T, int sz>
-void FFT(ComplexArray<T, sz>& input, ComplexArray<T, sz>& output) {
 
-}
 struct Indx { int i, j; };
 
 template <int sz>
@@ -209,7 +209,7 @@ struct FFT2D {
         FFTPack<sz>(&butrfly_out)[sz],
         int sign) {
         for (int i = 0; i < sz; i++)
-            butrfly_out[i].template butterfly<sz>(0, butrfly_inp[i], sign);
+            butrfly_out[i].butterfly(0, butrfly_inp[i], sign);
         transpose(&butrfly_out[0]);
     }
 
@@ -237,7 +237,10 @@ template <int k>
 struct ComplexNoise {
     static constexpr int sz = 1 << k;
     static constexpr int sz_sq = sz * sz;
-    static constexpr float standard = 1 / (root2f * sz);
+    
+    //static constexpr float standard = 1 / (root2f * (1 << k / 2));
+    static constexpr float standard = 1 / (root2f * (1 << k));
+    //static constexpr float standard = 1 ;
 
     ComplexArrayFloat<sz>* noise;
     float ref_landscp[sz_sq];
@@ -310,7 +313,7 @@ struct ComplexNoise {
         double power = 0;
         for (int i = 0; i < sz_sq; i++) power += sqre((double)spectral_bias[i]);
 
-        double res = pi * std::sqrt(power) / sz;
+        double res =  std::sqrt(power) / sz;
         //std::cout << "power: " << res << "\n";
         return res;
     }
@@ -338,8 +341,8 @@ struct ComplexNoise {
     }
 
     void grayscale_noise(float* hue, float* inten) {
-        make_arr(noise, hue, hue_func);
         make_arr(noise, inten, mag_f);
+        make_arr(noise, hue, hue_func);
         apply_scaling(inten);
     }
     void output_grayscale(float* mag_arr) {
@@ -348,8 +351,8 @@ struct ComplexNoise {
     }
 
     void output_colored(float* hue, float* inten) {
-        make_arr(&(fft.output())[0], hue, hue_func);
-        make_arr(&(fft.output())[0], inten, mag_f);
+        make_arr(&(fft.y_arr())[0], inten, mag_f);
+        make_arr(&(fft.y_arr())[0], hue, hue_func);
         apply_scaling(inten);
     }
 
@@ -395,9 +398,9 @@ int main() {
     cn.fft.fft();
     cn.output_colored(hue,inten);
 
-    write_lst_to(hue,sz,sz,1,lst_string,"hue");
     write_lst_to(inten, sz, sz, 1, lst_string, "inten");
-
+    write_lst_to(hue,sz,sz,1,lst_string,"hue");
+   
     list_file << lst_string.rdbuf();
     list_file.close();
     system("py bitmap.py");
