@@ -35,8 +35,11 @@ inline T sqre(T x) { return x * x; };
 float mag_f(float a, float b) { return std::sqrt(sqre(a) + sqre(b)); }
 float real(float a, float b) { return a; }
 float imag(float a, float b) { return b; }
-float round_imag(float a, float b) { return (float)(int)(50 * b);}
-float hue_func(float a, float b) { return (std::atan(b/ a) + pi) / (2 * pi); }
+
+float round_imag(float a, float b) { return (float)(int)(50 * b); }
+float round_real(float a, float b) { return (float)(int)(50 * a); }
+
+float hue_func(float a, float b) { return (std::atan(b / a) + pi) / (2 * pi); }
 //float hue_func(float a, float b) { return (std::atan2(b , a) + pi) / (2 * pi); }
 
 
@@ -93,6 +96,7 @@ struct OmegaTabel {
     static float* get_cos() { return omega; }
 
     static void make_omega() {
+
         for (int i = 0; i < n; i++)
             omega[i] = std::cos(2 * pi * i / n);
 
@@ -136,14 +140,14 @@ struct FFTPack : ComplexArrayFloat<n>
         float* minus_sin = OmegaTabel<N, n>::get_minus_sin();
 
         for (int i = 0; i < nby2; i++) {
-            float even_real = cos[i] * even.real[i] + sign * (-minus_sin[i]) * even.imag[i];
-            float even_imag = cos[i] * even.imag[i] - sign * (-minus_sin[i]) * even.real[i];
+            float sin = sign * (-minus_sin[i]);
+            float odd_real = cos[i] * odd.real[i] + sin * odd.imag[i];
+            float odd_imag = cos[i] * odd.imag[i] - sin * odd.real[i];
 
-            this->real[i] = odd.real[i] + even_real;
-            this->imag[i] = odd.imag[i] + even_imag;
-
-            this->real[i + nby2] = odd.real[i] - even_real;
-            this->imag[i + nby2] = odd.imag[i] - even_imag;
+            this->real[i] = even.real[i] + odd_real;
+            this->imag[i] = even.imag[i] + odd_imag;
+            this->real[i + nby2] = even.real[i] - odd_real;
+            this->imag[i + nby2] = even.imag[i] - odd_imag;
         }
 
     }
@@ -193,6 +197,7 @@ struct FFT2D {
     void transpose(ComplexArrayFloat<sz>* arr) {
         for (int i = 0; i < sz; i++) {
             for (int j = i; j < sz; j++) {
+
                 float temp_real = arr[i].real[j];
                 arr[i].real[j] = arr[j].real[i];
                 arr[j].real[i] = temp_real;
@@ -217,13 +222,12 @@ struct FFT2D {
         memcpy(input, fy, sizeof(input));
     }
 
-    // Forward FFT: sign = -1
+    
     void fft() {
         fft_of(input, fx, 1);
         fft_of(fx, fy, 1);
     }
 
-    // Inverse FFT: sign = +1
     void inverse_fft() {
         fft_of(input, fx, -1);
         fft_of(fx, fy, -1);
@@ -237,9 +241,9 @@ template <int k>
 struct ComplexNoise {
     static constexpr int sz = 1 << k;
     static constexpr int sz_sq = sz * sz;
-    
+
     //static constexpr float standard = 1 / (root2f * (1 << k / 2));
-    static constexpr float standard = 1 / (root2f * (1 << k));
+    static constexpr float standard = 1 / (root2f* (1 <<  k));
     //static constexpr float standard = 1 ;
 
     ComplexArrayFloat<sz>* noise;
@@ -268,8 +272,8 @@ struct ComplexNoise {
         int z = sz / 2;
         for (int i = 0; i <= z; i++) {
             for (int j = 0; j <= z; j++) {
-                int is = (sz - i)%sz;
-                int js = (sz - j)%sz;
+                int is = (sz - i) % sz;
+                int js = (sz - j) % sz;
 
                 noise[i].real[j] = noise[is].real[js] = normal(engine);
                 noise[is].real[j] = noise[i].real[js] = normal(engine);
@@ -313,21 +317,20 @@ struct ComplexNoise {
         double power = 0;
         for (int i = 0; i < sz_sq; i++) power += sqre((double)spectral_bias[i]);
 
-        double res =  std::sqrt(power) / sz;
+        double res = std::sqrt(power) / sz;
         //std::cout << "power: " << res << "\n";
         return res;
     }
 
     void apply_scaling(float* arr) {
         float scaling = spectral_power();
-        std::cout << "scaling: " << scaling<<"\n";
+        std::cout << "scaling: " << scaling << "\n";
         for (int i = 0; i < sz_sq; i++) arr[i] /= scaling;
     }
 
     void apply_spectral_bias() {
         for (int i = 0; i < sz; i++) {
             for (int j = 0; j < sz; j++) {
-                spectral_bias[index(i, j)] = 1;
                 noise[i].real[j] *= spectral_bias[index(i, j)];
                 noise[i].imag[j] *= spectral_bias[index(i, j)];
             }
@@ -358,7 +361,7 @@ struct ComplexNoise {
     }
 
     void output_colored(float* hue, float* inten) {
-        make_arr(&(fft.y_arr())[0], inten, mag_f);
+        make_arr(&(fft.y_arr())[0], inten, real);
         make_arr(&(fft.y_arr())[0], hue, hue_func);
         apply_scaling(inten);
     }
@@ -384,7 +387,7 @@ struct ComplexNoise {
 };
 
 
-constexpr long long int grid_pow = 3;
+constexpr long long int grid_pow = 8;
 constexpr long int grid_len = 1 << 2 * grid_pow;
 
 static ComplexNoise<grid_pow> cn;
@@ -399,21 +402,24 @@ int main() {
 
     std::stringstream lst_string;
     std::ofstream list_file("lists.py");
-    write_var_to(sz, lst_string, "sz");
+
+
+    write_var_to(sz, lst_string, "sz"); 
     make_arr(cn.noise, hue, round_imag);
     write_lst_to(hue, sz, sz, 1, lst_string, "noise");
 
+    //make_arr(cn.noise, hue, round_imag);
+    //write_lst_to(hue, sz, sz, 1, lst_string, "y_arr");
     cn.apply_spectral_bias();
-    cn.set_imag_zero();
-    cn.fft.fft();
-    //cn.output_colored(hue,inten);
+    cn.fft.inverse_fft();
+    cn.output_colored(hue,inten);
+    write_lst_to(inten, sz, sz, 1, lst_string, "inten");
+    write_lst_to(hue,sz,sz,1,lst_string,"hue");
 
-    //write_lst_to(inten, sz, sz, 1, lst_string, "inten");
-    //write_lst_to(hue,sz,sz,1,lst_string,"hue");
-    make_arr(cn.fft.y_arr(), hue, round_imag);
-    write_lst_to(hue, sz, sz, 1, lst_string, "y_arr");
+  
+
     list_file << lst_string.rdbuf();
     list_file.close();
-    //system("py bitmap.py");
+    system("py bitmap.py");
 
 }
