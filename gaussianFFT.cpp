@@ -33,9 +33,9 @@ inline T sqre(T x) { return x * x; };
 
 
 float mag_f(float a, float b) { return std::sqrt(sqre(a) + sqre(b)); }
-float real(float a, float b) { return 0 * a + 1 * std::abs(a); }
-float imag(float a, float b) { return std::abs(a); }
-
+float real(float a, float b) { return a; }
+float imag(float a, float b) { return b; }
+float round_imag(float a, float b) { return (float)(int)(50 * b);}
 float hue_func(float a, float b) { return (std::atan(b/ a) + pi) / (2 * pi); }
 //float hue_func(float a, float b) { return (std::atan2(b , a) + pi) / (2 * pi); }
 
@@ -266,10 +266,10 @@ struct ComplexNoise {
     void init_noise() {
         gen_seed();
         int z = sz / 2;
-        for (int i = 0; i < z; i++) {
-            for (int j = 0; j < z; j++) {
-                int is = sz - i - 1;
-                int js = sz - j - 1;
+        for (int i = 0; i <= z; i++) {
+            for (int j = 0; j <= z; j++) {
+                int is = (sz - i)%sz;
+                int js = (sz - j)%sz;
 
                 noise[i].real[j] = noise[is].real[js] = normal(engine);
                 noise[is].real[j] = noise[i].real[js] = normal(engine);
@@ -285,9 +285,9 @@ struct ComplexNoise {
         }
 
         noise[0].imag[0] = 0;
+        noise[0].imag[z] = 0;
         noise[z].imag[z] = 0;
-        noise[z].imag[sz - 1] = 0;
-        noise[sz - 1].imag[z] = 0;
+        noise[z].imag[0] = 0;
     }
 
     void init_spectral_bias() {
@@ -330,6 +330,13 @@ struct ComplexNoise {
                 spectral_bias[index(i, j)] = 1;
                 noise[i].real[j] *= spectral_bias[index(i, j)];
                 noise[i].imag[j] *= spectral_bias[index(i, j)];
+            }
+        }
+    }
+    void set_imag_zero() {
+        for (int i = 0; i < sz; i++) {
+            for (int j = 0; j < sz; j++) {
+                noise[i].imag[j] = 0;
             }
         }
     }
@@ -377,7 +384,7 @@ struct ComplexNoise {
 };
 
 
-constexpr long long int grid_pow = 8;
+constexpr long long int grid_pow = 3;
 constexpr long int grid_len = 1 << 2 * grid_pow;
 
 static ComplexNoise<grid_pow> cn;
@@ -393,16 +400,20 @@ int main() {
     std::stringstream lst_string;
     std::ofstream list_file("lists.py");
     write_var_to(sz, lst_string, "sz");
+    make_arr(cn.noise, hue, round_imag);
+    write_lst_to(hue, sz, sz, 1, lst_string, "noise");
 
     cn.apply_spectral_bias();
+    cn.set_imag_zero();
     cn.fft.fft();
-    cn.output_colored(hue,inten);
+    //cn.output_colored(hue,inten);
 
-    write_lst_to(inten, sz, sz, 1, lst_string, "inten");
-    write_lst_to(hue,sz,sz,1,lst_string,"hue");
-   
+    //write_lst_to(inten, sz, sz, 1, lst_string, "inten");
+    //write_lst_to(hue,sz,sz,1,lst_string,"hue");
+    make_arr(cn.fft.y_arr(), hue, round_imag);
+    write_lst_to(hue, sz, sz, 1, lst_string, "y_arr");
     list_file << lst_string.rdbuf();
     list_file.close();
-    system("py bitmap.py");
+    //system("py bitmap.py");
 
 }
