@@ -140,17 +140,18 @@ struct FFTPack : ComplexArrayFloat<n>
         float* cos = OmegaTabel<N, n>::get_cos();
         float* minus_sin = OmegaTabel<N, n>::get_minus_sin();
 
+        float fft_div = 1.f;
+        if constexpr (n == N) fft_div = N;
         for (int i = 0; i < nby2; i++) {
             float sin = sign * (-minus_sin[i]);
             float odd_real = cos[i] * odd.real[i] + sin * odd.imag[i];
             float odd_imag = cos[i] * odd.imag[i] - sin * odd.real[i];
 
-            this->real[i] = even.real[i] + odd_real;
-            this->imag[i] = even.imag[i] + odd_imag;
-            this->real[i + nby2] = even.real[i] - odd_real;
-            this->imag[i + nby2] = even.imag[i] - odd_imag;
+            this->real[i] = (even.real[i] + odd_real)/fft_div;
+            this->imag[i] = (even.imag[i] + odd_imag)/fft_div;
+            this->real[i + nby2] = (even.real[i] - odd_real)/fft_div;
+            this->imag[i + nby2] = (even.imag[i] - odd_imag)/fft_div;
         }
-
     }
 
     template<int N>
@@ -244,8 +245,8 @@ struct ComplexNoise {
     static constexpr int sz_sq = sz * sz;
 
     //static constexpr float standard = 1 / (root2f * (1 << k / 2));
-    static constexpr float standard = 1 / (2*root2f * (1 << k));
-    //static constexpr float standard = 1 ;
+    //static constexpr float standard = 1 / (2*root2f * (1 << k));
+    static constexpr float standard = 1 ;
 
     ComplexArrayFloat<sz>* noise;
     float ref_landscp[sz_sq];
@@ -306,8 +307,8 @@ struct ComplexNoise {
                 double dis = sqre(z - i - 1) + sqre(z - j - 1);
                 double scaled_dis = dis / (double)(z * z);
 
-                constexpr double spec_radii = 0.0001;
-                double val = std::pow(1 + std::pow(scaled_dis / spec_radii, 0.7), -1);
+                constexpr double spec_radii = 0.001;
+                double val = std::pow(1 + std::pow(scaled_dis / spec_radii, 2), -1);
                 //double val = (i == j == z - 1) ? 1 : 0.1;
 
                 set_vals(spectral_bias, (float)val,
